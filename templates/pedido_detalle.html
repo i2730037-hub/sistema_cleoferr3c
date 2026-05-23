@@ -1,0 +1,66 @@
+{% extends 'base.html' %}
+{% block titulito %}Detalle Pedido – Cleoferr{% endblock %}
+{% block contenido %}
+<div class="page-header">
+    <div>
+        <h2><i class="fa fa-receipt me-2"></i>Detalle del Pedido</h2>
+        <p>Información detallada del pedido y sus ítems</p>
+    </div>
+    <a href="/pedidos" class="btn btn-outline-light"><i class="fa fa-arrow-left me-1"></i>Volver</a>
+</div>
+
+<div class="card card-custom mb-3">
+    <div class="card-body">
+        {% if pedido %}
+        <div class="row">
+            <div class="col-md-4">
+                <strong>Pedido ID:</strong> {{ pedido.id_pedido or pedido.id }}<br>
+                <strong>Fecha:</strong> {{ pedido.fecha.strftime('%d/%m/%Y %H:%M') if pedido.fecha else '–' }}<br>
+                <strong>Cliente:</strong> {{ pedido.cliente_nombre or pedido.id_cliente or '–' }}<br>
+                <strong>Estado:</strong> <span class="badge {% if pedido.estado=='entregado' %}badge-activo{% elif pedido.estado=='pendiente' %}badge-inactivo{% else %}badge-salida{% endif %}">{{ pedido.estado }}</span>
+            </div>
+            <div class="col-md-4">
+                <strong>Total:</strong> S/ {{ "%.2f"|format(pedido.total|float) if pedido.total else '0.00' }}<br>
+                <strong>Responsable:</strong> {{ pedido.responsable or '–' }}<br>
+            </div>
+        </div>
+        {% else %}
+            <div class="text-center text-muted py-4">Pedido no encontrado</div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card card-custom">
+    <div class="card-header">
+        <i class="fa fa-list me-2"></i>Ítems del pedido
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-custom mb-0">
+                <thead>
+                    <tr>
+                        <th>Producto</th>
+                        <th>Cantidad</th>
+                        <th>Precio Unit.</th>
+                        <th>Subtotal</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for it in items %}
+                    <tr>
+                        <td>{{ it.producto_nombre or it.nombre or it.id_producto }}</td>
+                        <td>{{ it.cantidad }}</td>
+                        <td>S/ {{ "%.2f"|format(it.precio_unitario|float) if it.precio_unitario else '0.00' }}</td>
+                        <td class="fw-semibold">S/ {{ "%.2f"|format((it.precio_unitario|float)*(it.cantidad|int)) }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="4" class="text-center py-4 text-muted">No hay ítems registrados</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
