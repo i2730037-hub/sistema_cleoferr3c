@@ -25,6 +25,7 @@ from sqlalchemy import text
 
 app = Flask(__name__)
 app.secret_key = "clave_secreta_cleoferr"
+os.environ['TZ'] = 'America/Lima'
 app.config["SQLALCHEMY_DATABASE_URI"] = "mysql+pymysql://prueba-cleofer:Cleoferr@mysql-prueba-cleofer.alwaysdata.net/prueba-cleofer_tienda_online"
 app.config["SQLALCHEMY_DATABASE_URI"] = ("mysql+pymysql://prueba-cleofer_anthuanett:Cleoferr@mysql-prueba-cleofer.alwaysdata.net/prueba-cleofer_tienda_online")
 
@@ -999,61 +1000,39 @@ def carrito_confirmar():
         session['ultimo_pedido'] = items
         return {'ok': True}
 
-    # Usuario es cliente: registrar pedido en DB
-    conn = get_connection()
+    # Usuario es cliente: registrar venta en DB
+    conn   = get_connection()
     cursor = conn.cursor()
     try:
-        # calcular total
-        total = 0.0
-        for it in items:
-            precio = float(it.get('precio', 0) or 0)
-            cantidad = int(it.get('cantidad', 1) or 1)
-            total += precio * cantidad
+        # Insertar en tabla venta
+        cursor.execute("""
+            INSERT INTO venta (tipo_venta, id_cliente, estado)
+            VALUES ('online', %s, 'pendiente')
+        """, (session['usuario_id'],))
+        id_venta = cursor.lastrowid
 
-        # insertar pedido
-        cursor.execute(
-            "INSERT INTO pedido (id_cliente, fecha, total, estado) VALUES (%s, NOW(), %s, %s)",
-            (session['usuario_id'], total, 'pendiente')
-        )
-        id_pedido = cursor.lastrowid if hasattr(cursor, 'lastrowid') else None
-        # MySQL connector may provide lastrowid; if not, fetch max id (fallback)
-        if not id_pedido:
-            cursor.execute("SELECT LAST_INSERT_ID() AS id")
-            row = cursor.fetchone()
-            id_pedido = row[0] if row else None
-
-        # insertar items y ajustar stock (si existe tabla producto)
+        # Insertar detalle y descontar stock
         for it in items:
             id_producto = int(it.get('id_producto') or it.get('id') or 0)
             cantidad    = int(it.get('cantidad', 1))
             precio_unit = float(it.get('precio', 0) or 0)
-            try:
-                cursor.execute(
-                    "INSERT INTO pedido_item (id_pedido, id_producto, cantidad, precio_unitario) VALUES (%s, %s, %s, %s)",
-                    (id_pedido, id_producto, cantidad, precio_unit)
-                )
-            except Exception:
-                # si no existe pedido_item, continuar
-                pass
-            # intentar decrementar stock (no fallar si no existe)
-            try:
-                cursor.execute("SELECT stock FROM producto WHERE id_producto=%s", (id_producto,))
-                r = cursor.fetchone()
-                if r:
-                    current_stock = int(r[0])
-                    nuevo_stock = max(0, current_stock - cantidad)
-                    cursor.execute("UPDATE producto SET stock=%s WHERE id_producto=%s", (nuevo_stock, id_producto))
-            except Exception:
-                pass
+            cursor.execute("""
+                INSERT INTO detalle_venta (id_venta, id_producto, cantidad, precio_unitario)
+                VALUES (%s, %s, %s, %s)
+            """, (id_venta, id_producto, cantidad, precio_unit))
+            cursor.execute("""
+                UPDATE producto SET stock = GREATEST(stock - %s, 0)
+                WHERE id_producto = %s
+            """, (cantidad, id_producto))
 
         conn.commit()
         session['carrito'] = {}
         session['ultimo_pedido'] = items
-        flash(f"Pedido registrado correctamente. ID: {id_pedido}", "success")
-        return {'ok': True, 'id_pedido': id_pedido}
+        flash(f"¡Pedido #{id_venta} registrado correctamente! Pronto nos comunicaremos contigo.", "success")
+        return {'ok': True, 'id_pedido': id_venta}
     except Exception as e:
         conn.rollback()
-        app.logger.exception("Error creando pedido desde carrito: %s", e)
+        app.logger.exception("Error creando venta desde carrito: %s", e)
         return {'ok': False, 'error': str(e)}
     finally:
         conn.close()
