@@ -129,6 +129,15 @@
                     <i class="fa fa-sign-in-alt me-2"></i>Ingresar al Sistema
                 </button>
             </form>
+            {% if url_whatsapp %}
+            <div class="text-center mt-3">
+                <a href="{{ url_whatsapp }}" target="_blank" rel="noopener noreferrer"
+                    class="btn btn-success btn-sm px-4 py-2"
+                    style="border-radius:25px; font-size:0.85rem;">
+                        <i class="fa-brands fa-whatsapp me-2"></i>¿Olvidaste tus credenciales? Escríbenos
+                </a>
+            </div>
+            {% endif %}
             <div class="link-cliente">
                 ¿Eres cliente? <a href="/login_cliente">Acceder aquí</a>
             </div>

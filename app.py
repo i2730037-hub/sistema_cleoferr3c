@@ -1,6 +1,8 @@
 import os
 import sys
 import uuid
+# AÑADIR después de: import uuid
+from urllib.parse import quote
 # Intento seguro de importar dependencias externas; si faltan, mostrar instrucciones claras y salir.
 try:
     from flask import Flask, render_template, request, redirect, url_for, session, flash
@@ -155,7 +157,13 @@ def login():
             session['nombre']     = usuario['nombres']
             return redirect(url_for('productos'))
         return render_template('login.html', error='Credenciales incorrectas')
-    return render_template('login.html')
+    # Botón WhatsApp para recuperar credenciales (personal administrativo)
+    msg_admin = quote(
+        "Hola Soporte de Inversiones CLEOFERR, soy del personal ADMINISTRATIVO "
+        "(Administradora/Vendedora) y presento problemas con mis credenciales de acceso al sistema."
+    )
+    url_whatsapp = f"https://wa.me/51900555015?text={msg_admin}"
+    return render_template('login.html', url_whatsapp=url_whatsapp)
 
 
 @app.route('/login_cliente', methods=['GET', 'POST'])
@@ -194,7 +202,13 @@ def login_cliente():
                 return redirect(url_for('catalogo_cliente'))
 
         return render_template('login_cliente.html', error='Credenciales incorrectas')
-    return render_template('login_cliente.html')
+    # Botón WhatsApp para recuperar credenciales (clientes)
+    msg_cliente = quote(
+        "Hola Soporte de Inversiones CLEOFERR, soy un CLIENTE registrado y necesito ayuda "
+        "para recuperar mi contraseña o mis datos de acceso al sistema web."
+    )
+    url_whatsapp = f"https://wa.me/51900555015?text={msg_cliente}"
+    return render_template('login_cliente.html', url_whatsapp=url_whatsapp)
 
 
 @app.route('/logout')
