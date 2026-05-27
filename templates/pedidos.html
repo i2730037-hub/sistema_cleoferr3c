@@ -8,6 +8,9 @@
         <p>Listado de pedidos y su estado. Usa filtros para buscar por fecha, estado o cliente.</p>
     </div>
     <div class="d-flex gap-2">
+        <a href="/ventas/nueva" class="btn btn-naranja">
+            <i class="fa fa-plus me-1"></i> Nueva Venta
+        </a>
         <a href="/reportes/pedidos/exportar" class="btn btn-outline-secondary">
             <i class="fa fa-file-export me-1"></i> Exportar (Excel)
         </a>
@@ -75,8 +78,6 @@
                             <span class="badge {% if ped.estado == 'entregado' %}badge-activo{% elif ped.estado == 'pendiente' %}badge-inactivo{% else %}badge-salida{% endif %}">
                                 {{ ped.estado or '–' }}
                             </span>
-                        </td>
-                        <td>{{ ped.responsable or '–' }}</td>
                         <td>
                             <div class="d-flex gap-1">
                                 <a href="/pedidos/detalle/{{ ped.id_pedido or ped.id }}" class="btn btn-sm btn-outline-info" title="Ver detalle"><i class="fa fa-eye"></i></a>
@@ -84,12 +85,18 @@
                                 <form method="POST" action="/pedidos/cambiar_estado/{{ ped.id_pedido or ped.id }}" style="display:inline">
                                     <select name="nuevo_estado" class="form-select form-select-sm" style="display:inline-block;width:auto">
                                         <option value="pendiente">Pendiente</option>
-                                        <option value="confirmado">Confirmado</option>
-                                        <option value="enviado">Enviado</option>
+                                        <option value="pagado">Pagado</option>
                                         <option value="entregado">Entregado</option>
+                                        <option value="cancelado">Cancelado</option>
                                     </select>
                                     <button class="btn btn-sm btn-outline-warning" type="submit" title="Actualizar"><i class="fa fa-sync"></i></button>
                                 </form>
+                                {% endif %}
+                                {% if ped.url_whatsapp_pedido %}
+                                <a href="{{ ped.url_whatsapp_pedido }}" target="_blank" rel="noopener noreferrer"
+                                    class="btn btn-sm btn-success" title="Notificar al cliente por WhatsApp">
+                                        <i class="fa-brands fa-whatsapp"></i>
+                                </a>
                                 {% endif %}
                             </div>
                         </td>

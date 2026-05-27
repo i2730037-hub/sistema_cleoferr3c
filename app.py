@@ -684,13 +684,127 @@ def pedidos():
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
     try:
-        cursor.execute("SELECT * FROM pedido ORDER BY fecha DESC LIMIT 200")
-        pedidos = cursor.fetchall()
-    except Exception:
+        cursor.execute("""
+            SELECT
+                v.id_venta      AS id_pedido,
+                v.fecha,
+                v.tipo_venta,
+                v.estado,
+                CONCAT(c.nombre, ' ', c.apellido) AS cliente_nombre,
+                c.telefono      AS cliente_telefono,
+                u.nombres       AS responsable,
+                COALESCE(SUM(d.cantidad * d.precio_unitario), 0) AS total
+            FROM venta v
+            LEFT JOIN cliente  c ON v.id_cliente          = c.id_cliente
+            LEFT JOIN usuario  u ON v.id_usuario_vendedor  = u.id_usuario
+            LEFT JOIN detalle_venta d ON v.id_venta        = d.id_venta
+            GROUP BY v.id_venta, v.fecha, v.tipo_venta, v.estado,
+                     c.nombre, c.apellido, c.telefono, u.nombres
+            ORDER BY v.fecha DESC
+            LIMIT 200
+        """)
+        pedidos_raw = cursor.fetchall()
+        pedidos = []
+        for ped in pedidos_raw:
+            nombre   = ped.get('cliente_nombre') or 'Cliente'
+            telefono = (ped.get('cliente_telefono') or '').strip()
+            if telefono:
+                from urllib.parse import quote
+                # Asegurar formato internacional peruano (51 + 9 dígitos)
+                if telefono.startswith('+'):
+                    telefono = telefono[1:]
+                if not telefono.startswith('51'):
+                    telefono = '51' + telefono
+                msg = quote(
+                    f"Hola {nombre}, le saludamos de la Ferretería Inversiones CLEOFERR. "
+                    "Le informamos que su pedido ya ha sido procesado en nuestro sistema "
+                    "y se encuentra listo. ¡Muchas gracias por su preferencia!"
+                )
+                ped['url_whatsapp_pedido'] = f"https://wa.me/{telefono}?text={msg}"
+            else:
+                ped['url_whatsapp_pedido'] = None
+            pedidos.append(ped)
+    except Exception as e:
+        print(f"ERROR en /pedidos: {e}")
         pedidos = []
     finally:
         conn.close()
     return render_template('pedidos.html', pedidos=pedidos)
+
+@app.route('/ventas/nueva', methods=['GET'])
+@login_required
+@escritura_required
+def venta_nueva_form():
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+    clientes = []
+    productos = []
+    try:
+        cursor.execute("""
+            SELECT id_cliente, CONCAT(nombre, ' ', COALESCE(apellido,'')) AS nombre, telefono
+            FROM cliente WHERE estado = 'activo' ORDER BY nombre
+        """)
+        clientes = cursor.fetchall()
+        cursor.execute("""
+            SELECT id_producto, nombre, precio, stock
+            FROM producto WHERE estado = 'activo' AND stock > 0 ORDER BY nombre
+        """)
+        productos = cursor.fetchall()
+    except Exception as e:
+        print(f"ERROR en /ventas/nueva GET: {e}")
+    finally:
+        conn.close()
+    return render_template('venta_form.html', clientes=clientes, productos=productos)
+
+
+@app.route('/ventas/nueva', methods=['POST'])
+@login_required
+@escritura_required
+def venta_nueva_guardar():
+    id_cliente   = request.form.get('id_cliente') or None
+    tipo_venta   = request.form.get('tipo_venta', 'local')
+    ids_producto = request.form.getlist('id_producto[]')
+    cantidades   = request.form.getlist('cantidad[]')
+
+    if not ids_producto:
+        flash('Debes agregar al menos un producto.', 'danger')
+        return redirect(url_for('venta_nueva_form'))
+
+    conn   = get_connection()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        # Crear la venta
+        cursor.execute("""
+            INSERT INTO venta (tipo_venta, id_cliente, id_usuario_vendedor, estado)
+            VALUES (%s, %s, %s, 'pendiente')
+        """, (tipo_venta, id_cliente, session.get('usuario_id')))
+        id_venta = cursor.lastrowid
+
+        # Insertar cada ítem y descontar stock
+        for id_prod, cant in zip(ids_producto, cantidades):
+            cant = int(cant) if cant else 1
+            cursor.execute("SELECT precio, stock FROM producto WHERE id_producto = %s", (id_prod,))
+            prod = cursor.fetchone()
+            if not prod:
+                continue
+            cursor.execute("""
+                INSERT INTO detalle_venta (id_venta, id_producto, cantidad, precio_unitario)
+                VALUES (%s, %s, %s, %s)
+            """, (id_venta, id_prod, cant, prod['precio']))
+            cursor.execute("""
+                UPDATE producto SET stock = stock - %s WHERE id_producto = %s
+            """, (cant, id_prod))
+
+        conn.commit()
+        flash(f'Venta #{id_venta} registrada correctamente.', 'success')
+        return redirect(url_for('pedidos'))
+
+    except Exception as e:
+        print(f"ERROR al guardar venta: {e}")
+        flash('Error al registrar la venta. Intenta de nuevo.', 'danger')
+        return redirect(url_for('venta_nueva_form'))
+    finally:
+        conn.close()
 
 
 @app.route('/pedidos/detalle/<int:id>')
